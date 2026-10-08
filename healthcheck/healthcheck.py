@@ -14,6 +14,7 @@ Kody wyjścia: 0 — wszystkie cele OK, 1 — co najmniej jeden BŁĄD,
 """
 
 import argparse
+import os
 import json
 import sys
 import time
