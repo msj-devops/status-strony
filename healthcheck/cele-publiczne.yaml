@@ -1,0 +1,10 @@
+# Cele nocnego healthchecka (workflow nocny-healthcheck.yml): publiczne adresy, które da się sprawdzić z internetu.
+cele:
+  - url: https://github.com/msj-devops/status-strony
+    oczekiwany_status: 200
+  - url: https://github.com/msj-devops/status-strony/blob/main/README.md
+    oczekiwany_status: 200
+  - url: https://raw.githubusercontent.com/msj-devops/status-strony/main/strona/html/index.html
+    oczekiwany_status: 200
+  - url: https://github.com/msj-devops/status-strony/nie-ma-takiej-strony
+    oczekiwany_status: 404
