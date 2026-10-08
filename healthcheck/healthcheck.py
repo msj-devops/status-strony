@@ -127,7 +127,7 @@ def opisz_wynik(wynik):
     status = wynik.get("status")
     if status is None:
         return f"{wynik['url']}: brak odpowiedzi"
-    return f"{wynik['url']}: {status} w {czas_ms} ms"
+    return f"{wynik['url']}: {status} w {wynik['czas_ms']} ms"
 
 
 if __name__ == "__main__":
