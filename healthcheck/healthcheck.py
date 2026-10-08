@@ -122,5 +122,13 @@ def main():
     return 0 if all(w["ok"] for w in wyniki) else 1
 
 
+def opisz_wynik(wynik):
+    """Jedna linia o wyniku celu do raportu dziennego (raport dopiszę w kolejnym Pull Requeście)."""
+    status = wynik.get("status")
+    if status is None:
+        return f"{wynik['url']}: brak odpowiedzi"
+    return f"{wynik['url']}: {status} w {wynik['czas_ms']} ms"
+
+
 if __name__ == "__main__":
     sys.exit(main())

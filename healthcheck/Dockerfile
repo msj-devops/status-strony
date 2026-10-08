@@ -3,7 +3,7 @@
 # Uruchomienie:  docker run --rm -v "$PWD/cele.yaml:/dane/cele.yaml:ro" <login>/healthcheck:1.0 /dane/cele.yaml
 
 # Lekki obraz bazowy z przypiętą wersją (Debian slim: glibc, gotowe koła dla requests/pyyaml).
-FROM python:3.12-slim
+FROM python:3.12-slim-trixie
 
 # Bez plików .pyc w obrazie, logi od razu na stdout (docker logs).
 ENV PYTHONDONTWRITEBYTECODE=1 \
