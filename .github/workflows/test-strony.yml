@@ -1,0 +1,89 @@
+# Test strony: nginx z konfiguracją z repozytorium na runnerach amd64 i arm64, healthcheck i raport.
+name: Test strony
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  OBRAZ_NGINX: nginx:1.30-alpine
+
+jobs:
+  strona:
+    name: Strona (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@v7
+
+      - name: Przygotuj Pythona
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: healthcheck/requirements.txt
+
+      - name: Zainstaluj zależności healthchecka
+        run: pip install -r healthcheck/requirements.txt
+
+      - name: Uruchom stronę w nginx
+        run: |
+          mkdir -p "$RUNNER_TEMP/hasla"
+          # konto tylko na czas testu, z losowym hasłem: panel ma żądać logowania
+          printf 'ci:%s\n' "$(openssl passwd -apr1 "$(openssl rand -hex 16)")" > "$RUNNER_TEMP/hasla/htpasswd"
+          chmod 644 "$RUNNER_TEMP/hasla/htpasswd"
+          docker run -d --name strona -p 8080:80 \
+            -v "$PWD/strona/html:/usr/share/nginx/html:ro" \
+            -v "$PWD/strona/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$RUNNER_TEMP/hasla:/etc/nginx/hasla:ro" \
+            "$OBRAZ_NGINX"
+          curl --silent --retry 10 --retry-connrefused --retry-delay 1 -o /dev/null http://localhost:8080/
+
+      - name: Sprawdź stronę healthcheckiem
+        run: python healthcheck/healthcheck.py healthcheck/cele-ci.yaml --raport "raport-${{ runner.arch }}.json"
+
+      - name: Pokaż logi nginx
+        if: failure()
+        run: docker logs strona
+
+      - name: Zapisz raport jako artefakt
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: raport-${{ runner.arch }}
+          path: raport-${{ runner.arch }}.json
+          if-no-files-found: error
+          retention-days: 14
+
+  podsumowanie:
+    needs: strona
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz raporty
+        uses: actions/download-artifact@v8
+        with:
+          pattern: raport-*
+          merge-multiple: true
+
+      - name: Zapisz podsumowanie
+        run: |
+          {
+            echo "## Test strony"
+            echo
+            echo "Wynik jobów strony: **${{ needs.strona.result }}**"
+            echo
+            echo "| Raport | Adres | Status | Czas [ms] | Wynik |"
+            echo "|---|---|---|---|---|"
+            for plik in raport-*.json; do
+              jq -r --arg r "$plik" '.[] | "| \($r) | \(.url) | \(.status // "-") | \(.czas_ms) | \(if .ok then "OK" else "BŁĄD" end) |"' "$plik"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
