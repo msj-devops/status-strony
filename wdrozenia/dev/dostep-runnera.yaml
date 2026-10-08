@@ -1,0 +1,52 @@
+# Konto, którym runner GitHub Actions w VM wdraża chart status-strony do f2-dev.
+# Uprawnienia tylko w f2-dev i tylko do rodzajów obiektów z chartu (plus to, czego potrzebuje Helm i test dymny).
+# Zastosowanie (raz, z Twojego konta w VM): kubectl apply -f wdrozenia/dev/dostep-runnera.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wdrozenie-ci
+  namespace: f2-dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wdrozenie-ci
+  namespace: f2-dev
+rules:
+  # obiekty chartu; Secrety: historia release'ów Helma (sh.helm.release.v1.*)
+  - apiGroups: [""]
+    resources: [configmaps, secrets, services, persistentvolumeclaims]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # czekanie na gotowość (helm --wait) i test dymny: odczyt Podów i ich logów
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods, events]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: wdrozenie-ci
+  namespace: f2-dev
+subjects:
+  - kind: ServiceAccount
+    name: wdrozenie-ci
+    namespace: f2-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: wdrozenie-ci

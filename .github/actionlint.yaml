@@ -1,0 +1,4 @@
+# Konfiguracja actionlint: własne etykiety runnera w VM (runs-on: [self-hosted, minikube]).
+self-hosted-runner:
+  labels:
+    - minikube

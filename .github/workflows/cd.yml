@@ -121,3 +121,36 @@ jobs:
         run: |
           kubectl -n "$PRZESTRZEN" get all,ingress,pvc
           kubectl -n "$PRZESTRZEN" get events --sort-by=.lastTimestamp | tail -n 30
+
+  dev:
+    name: Wdrożenie na dev
+    needs: kind
+    # runner w VM: tylko on widzi klaster minikube. Ten workflow rusza wyłącznie po pushu do main,
+    # nigdy przy Pull Requeście, więc na runnerze w VM nie wykona się kod spoza main.
+    runs-on: [self-hosted, minikube]
+    timeout-minutes: 10
+    env:
+      PRZESTRZEN: f2-dev
+      RELEASE: strona-dev
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Wdróż chart z obrazem tego commita (przy błędzie Helm wraca do poprzedniej wersji)
+        run: |
+          helm upgrade --install "$RELEASE" chart/status-strony -n "$PRZESTRZEN" \
+            -f wdrozenia/dev/values.yaml \
+            --set healthcheck.image.tag="$GITHUB_SHA" \
+            --rollback-on-failure --timeout 5m
+          helm history "$RELEASE" -n "$PRZESTRZEN" --max 3
+
+      - name: "Test dymny: healthcheck z nowego obrazu w f2-dev"
+        env:
+          JOB: test-dymny-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          kubectl -n "$PRZESTRZEN" create job "$JOB" --from="cronjob/$RELEASE-healthcheck"
+          wynik=0
+          kubectl -n "$PRZESTRZEN" wait --for=condition=complete "job/$JOB" --timeout=120s || wynik=1
+          kubectl -n "$PRZESTRZEN" logs "job/$JOB" || true
+          kubectl -n "$PRZESTRZEN" delete job "$JOB" --wait=false
+          exit "$wynik"
