@@ -1,0 +1,30 @@
+# Kontekst budowania: do obrazu trafiają tylko requirements.txt i healthcheck.py.
+# Alternatywa („lista dozwolonych”): pierwsza linia `*`, potem `!healthcheck.py` i `!requirements.txt`.
+
+# Git i edytory
+.git
+.gitignore
+.vscode/
+.idea/
+
+# Środowisko Pythona i cache
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Sekrety — nigdy do obrazu
+.env
+*.pem
+*.key
+
+# Konfiguracja i wyniki: podawane z zewnątrz (wolumen), nie wbudowane w obraz
+cele*.yaml
+*.json
+
+# Pliki budowania i dokumentacja — obrazowi niepotrzebne, a ich zmiana psułaby cache przy COPY . .
+Dockerfile*
+.dockerignore
+compose.yaml
+README.md

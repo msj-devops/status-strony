@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "status-strony.fullname" . }}-status
+  labels:
+    {{- include "status-strony.labels" . | nindent 4 }}
+    app.kubernetes.io/component: status
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "status-strony.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: status
+  template:
+    metadata:
+      labels:
+        {{- include "status-strony.labels" . | nindent 8 }}
+        app.kubernetes.io/component: status
+    spec:
+      containers:
+        - name: nginx
+          image: "{{ .Values.status.image.repository }}:{{ .Values.status.image.tag }}"
+          ports:
+            - name: http
+              containerPort: 80
+          # tcpSocket, a nie httpGet /raport.json: zaraz po instalacji raportu jeszcze nie ma
+          # (pierwszy zapisze healthcheck), a helm --wait czekałby na gotowość do 5 minut
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.status.resources | nindent 12 }}
+          volumeMounts:
+            - name: raporty
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+      volumes:
+        - name: raporty
+          persistentVolumeClaim:
+            claimName: {{ include "status-strony.pvc" . }}
+            readOnly: true

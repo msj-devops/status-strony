@@ -1,0 +1,51 @@
+{{- $login := required "Brak loginu: ustaw wartość login (np. w values-dev.yaml albo --set login=...)" .Values.login -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "status-strony.fullname" . }}-strona
+  labels:
+    {{- include "status-strony.labels" . | nindent 4 }}
+    app.kubernetes.io/component: strona
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="pl">
+    <head>
+      <meta charset="utf-8">
+      <title>Strona zespołu — {{ $login }}</title>
+    </head>
+    <body style="font-family: sans-serif; max-width: 40em; margin: 3em auto">
+      <h1>Strona zespołu</h1>
+      <p>Utrzymuje: <strong>{{ $login }}</strong></p>
+      <p>Środowisko: <strong>{{ .Release.Namespace }}</strong>, wydanie {{ .Release.Name }}.</p>
+      <p>Wersja: <strong>{{ .Chart.AppVersion }}</strong></p>
+    </body>
+    </html>
+  admin.html: |
+    <!doctype html>
+    <html lang="pl">
+    <head>
+      <meta charset="utf-8">
+      <title>Panel — {{ $login }}</title>
+    </head>
+    <body style="font-family: sans-serif; max-width: 40em; margin: 3em auto">
+      <h1>Panel administracyjny</h1>
+      <p>Tylko dla zespołu <strong>{{ $login }}</strong>.</p>
+    </body>
+    </html>
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location / {
+            try_files $uri $uri/ =404;
+        }
+
+        location /admin/ {
+            auth_basic {{ .Values.admin.realm | quote }};
+            auth_basic_user_file /etc/nginx/hasla/htpasswd;
+        }
+    }

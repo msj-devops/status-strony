@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "status-strony.fullname" . }}-status
+  labels:
+    {{- include "status-strony.labels" . | nindent 4 }}
+    app.kubernetes.io/component: status
+spec:
+  selector:
+    {{- include "status-strony.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: status
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

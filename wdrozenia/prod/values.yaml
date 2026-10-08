@@ -1,0 +1,16 @@
+# Środowisko produkcyjne: release strona-prod w przestrzeni nazw f2-prod
+login: msj-devops
+
+strona:
+  replicas: 3
+  host: strona-prod.lab.local
+
+status:
+  host: status-prod.lab.local
+
+healthcheck:
+  image:
+    repository: msjtest/healthcheck
+  cele:
+    - url: http://strona-prod-strona/nie-ma-takiej-strony
+      oczekiwany_status: 404

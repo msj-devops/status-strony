@@ -1,0 +1,19 @@
+# Środowisko testowe: release strona-dev w przestrzeni nazw f2-dev
+login: msj-devops
+
+strona:
+  replicas: 1
+  host: strona-dev.lab.local
+
+status:
+  host: status-dev.lab.local
+
+healthcheck:
+  image:
+    repository: msjtest/healthcheck
+  cele:
+    - url: http://strona-dev-strona/nie-ma-takiej-strony
+      oczekiwany_status: 404
+
+persistence:
+  size: 10Mi

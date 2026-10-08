@@ -1,0 +1,8 @@
+apiVersion: v2
+name: status-strony
+description: Strona zespołu z panelem /admin/, healthcheck co 5 minut i strona statusu z ostatnim raportem
+type: application
+# wersja chartu (SemVer): rośnie przy każdej zmianie w chartcie
+version: 0.2.0
+# wersja aplikacji, czyli treści strony
+appVersion: "2.1"

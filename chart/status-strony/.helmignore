@@ -1,0 +1,11 @@
+# Pliki, których helm package nie dołącza do paczki chartu.
+.DS_Store
+.git/
+.gitignore
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+.idea/
+.vscode/
