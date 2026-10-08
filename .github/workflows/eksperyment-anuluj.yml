@@ -1,4 +1,4 @@
-# Tymczasowy eksperyment (Moduł 02): co z jobem zbiorczym z !cancelled(), gdy przebieg anulowano.
+# Tymczasowy eksperyment (Moduł 02): job zbiorczy bez warunku, gdy job, od którego zależy, się nie udał.
 name: Eksperyment anulowanie
 
 on:
@@ -8,27 +8,17 @@ permissions:
   contents: read
 
 jobs:
-  dlugi:
-    name: Długi
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - run: sleep 240
-
-  werdykt-nie-anulowany:
-    name: Werdykt z !cancelled()
-    needs: dlugi
-    if: ${{ !cancelled() }}
+  testy:
+    name: Testy eksperymentu
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - run: echo "wyniki ${{ needs.dlugi.result }}"; test "${{ needs.dlugi.result }}" = success
+      - run: exit 1
 
-  werdykt-zawsze:
-    name: Werdykt z always()
-    needs: dlugi
-    if: always()
+  werdykt-bez-warunku:
+    name: Werdykt bez warunku
+    needs: testy
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - run: echo "wyniki ${{ needs.dlugi.result }}"; test "${{ needs.dlugi.result }}" = success
+      - run: echo "tu nie dojdziemy"
