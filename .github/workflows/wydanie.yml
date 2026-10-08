@@ -61,8 +61,11 @@ jobs:
     needs: obraz
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # wymagane zatwierdzenie: ustawione w środowisku prod (Settings → Environments)
-    environment: prod
+    # wymagane zatwierdzenie: ustawione w środowisku prod (Settings → Environments);
+    # adres strony na prod ze zmiennej środowiska ADRES_STRONY trafia do historii wdrożeń
+    environment:
+      name: prod
+      url: ${{ vars.ADRES_STRONY }}
     permissions:
       contents: write
       pull-requests: write

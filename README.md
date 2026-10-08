@@ -66,3 +66,27 @@ tag vX.Y.Z       ─▶ Wydanie: obraz <SHA> dostaje tag X.Y.Z ─▶ zatwierdze
 - **Wydanie:** `git tag -a v1.2.0 -m "…"` na commicie z `main`, dla którego `CD` jest zielony, i `git push origin v1.2.0`. Po zatwierdzeniu w środowisku `prod` workflow `Wydanie` otwiera Pull Request ze zmianą wersji w `wdrozenia/prod/values.yaml`. Scalasz go jak każdy inny, przy zielonych testach.
 - **Wycofanie na prod:** `git revert` commitu „Prod: healthcheck X.Y.Z” w Pull Requeście i scalenie. Argo CD wróci do poprzedniej wersji.
 - **Wycofanie na dev:** ponowne uruchomienie joba `Wdrożenie na dev` z przebiegu `CD` dla poprzedniego commita (`gh run rerun <ID> --job <ID joba>`).
+
+## Sekrety i konfiguracja środowisk
+
+W repozytorium nie ma żadnych haseł ani skrótów haseł. Konfiguracja aplikacji jest w `wdrozenia/<środowisko>/values.yaml`, a to, czego potrzebuje pipeline, w ustawieniach środowisk GitHuba (*Settings → Environments*):
+
+| Co | dev | prod |
+|---|---|---|
+| adres strony w historii wdrożeń | zmienna `ADRES_STRONY` środowiska `dev` | zmienna `ADRES_STRONY` środowiska `prod` |
+| login do panelu `/admin/` | zmienna `PANEL_LOGIN` środowiska `dev` | w Secrecie w klastrze (niżej) |
+| hasło do panelu | sekret `PANEL_HASLO` środowiska `dev`; job „Wdrożenie na dev” zamienia je na skrót i zapisuje w Secrecie `strona-htpasswd` w `f2-dev` | **poza GitHubem**: Secret `strona-htpasswd` w `f2-prod` tworzy ręcznie administrator klastra (przepis: README chartu, „Secret z hasłami panelu”). Pipeline i Argo CD go nie dotykają |
+
+**Zmiana hasła na dev:** `gh secret set PANEL_HASLO --env dev` (pyta o hasło), potem ponowne uruchomienie joba „Wdrożenie na dev” z ostatniego przebiegu `CD` (`gh run rerun <ID> --job <ID joba>`). Bez tego dev ma stare hasło: job czyta sekret, gdy rusza.
+
+**Zmiana hasła na prod:** z konta administratora klastra, z hasłem podanym na wejście (bez zapisywania go w pliku i w historii powłoki):
+
+```bash
+read -rsp 'Nowe hasło: ' HASLO; echo
+printf '%s:%s\n' <LOGIN> "$(printf '%s' "$HASLO" | openssl passwd -apr1 -stdin)" \
+  | kubectl -n f2-prod create secret generic strona-htpasswd --from-file=htpasswd=/dev/stdin --dry-run=client -o yaml \
+  | kubectl -n f2-prod apply -f -
+unset HASLO
+```
+
+Hasło zapisz w menedżerze haseł zespołu. Argo CD nie usunie tego Secretu: nie jest w manifestach w repozytorium.
