@@ -10,7 +10,8 @@ status:
 
 healthcheck:
   image:
-    repository: msjtest/healthcheck
+    # obraz z pipeline'u CD; tag (SHA commita) podaje job wdrożenia
+    repository: ghcr.io/msj-devops/healthcheck
   cele:
     - url: http://strona-dev-strona/nie-ma-takiej-strony
       oczekiwany_status: 404
