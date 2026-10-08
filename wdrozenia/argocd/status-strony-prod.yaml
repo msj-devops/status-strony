@@ -1,0 +1,41 @@
+# Argo CD: f2-prod = chart z gałęzi main z wartościami wdrozenia/prod/values.yaml.
+# Zastosowanie (raz, z Twojego konta w VM): kubectl apply -f wdrozenia/argocd/status-strony-prod.yaml
+#
+# Projekt: Argo CD wdraża w jego ramach tylko z tego repozytorium i tylko do f2-prod,
+# bez obiektów spoza przestrzeni nazw (instalacja core nie tworzy projektu default).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: status-strony
+  namespace: argocd
+spec:
+  description: Strona statusu z repozytorium status-strony
+  sourceRepos:
+    - https://github.com/msj-devops/status-strony.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: f2-prod
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: status-strony-prod
+  namespace: argocd
+spec:
+  project: status-strony
+  source:
+    repoURL: https://github.com/msj-devops/status-strony.git
+    targetRevision: main
+    path: chart/status-strony
+    helm:
+      # nazwa release'u jak w Fazie 2: nazwy obiektów (strona-prod-…) i adresy celów healthchecka bez zmian
+      releaseName: strona-prod
+      valueFiles:
+        - ../../wdrozenia/prod/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: f2-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
