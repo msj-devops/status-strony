@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-wydanie
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  wydanie: {{ .Release.Name }}
+  chart: {{ .Chart.Version }}
+  rewizja: {{ .Release.Revision }}
