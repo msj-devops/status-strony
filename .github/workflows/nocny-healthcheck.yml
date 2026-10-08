@@ -5,8 +5,6 @@ on:
   schedule:
     # 2:17 UTC = 3:17 czasu zimowego i 4:17 letniego w Polsce; nie o pełnej godzinie, bo wtedy GitHub ma największy ruch
     - cron: "17 2 * * *"
-    # TYMCZASOWO: pomiar opóźnienia harmonogramu, do usunięcia
-    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 permissions:
