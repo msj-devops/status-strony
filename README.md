@@ -35,7 +35,7 @@ docker run --rm -p 8080:80 \
 
 Każdy Pull Request sprawdza workflow `CI` (`.github/workflows/ci.yml`): lintery (ruff, yamllint, hadolint, actionlint), testy healthchecka na trzech wersjach Pythona, chart (`helm lint`, `helm template | kubeconform` dla `dev` i `prod`) i budowanie obrazu bez publikacji. Joby ruszają tylko dla zmienionych części, a job `CI OK` zbiera ich wyniki. Test strony (`test-strony.yml`) uruchamia stronę z chartu na amd64 i arm64. Gałąź `main` chroni reguła: scalenie wymaga zielonych `CI OK` i obu wariantów testu strony.
 
-Testy i lintery lokalnie (w `healthcheck/`):
+Testy i lintery lokalnie (w `healthcheck/`, w tych samych wersjach co w CI — `requirements-dev.txt`):
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
