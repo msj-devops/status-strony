@@ -31,6 +31,7 @@ jobs:
       - name: Pobierz kod repozytorium z historią
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Ustal, które części się zmieniły
@@ -68,6 +69,8 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Przygotuj Pythona
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -91,6 +94,8 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Przygotuj Pythona
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -114,6 +119,8 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: hadolint
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo hadolint/hadolint:v2.15.1 hadolint --no-color healthcheck/Dockerfile
@@ -127,6 +134,8 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: actionlint (z shellcheck dla kroków run)
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
@@ -148,6 +157,8 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Przygotuj Pythona ${{ matrix.python }}
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -176,6 +187,8 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Przygotuj Helma
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
@@ -211,6 +224,8 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Przygotuj buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1

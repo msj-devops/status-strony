@@ -1,0 +1,12 @@
+# Dependabot: aktualizacje wersji akcji GitHub Actions z .github/workflows.
+# Akcje są przypięte do SHA: Dependabot zmienia SHA i komentarz z wersją. Wszystkie akcje w jednym Pull Requeście
+# (grupa), raz w tygodniu; nowa wersja trafia do propozycji dopiero po okresie oczekiwania (domyślny).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      akcje:
+        patterns: ["*"]
