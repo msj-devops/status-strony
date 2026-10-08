@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Strona zespołu — {{ .Values.login }}</title>
+</head>
+<body style="font-family: sans-serif; max-width: 40em; margin: 3em auto">
+  <h1>Strona zespołu</h1>
+  <p>Utrzymuje: <strong>{{ .Values.login }}</strong></p>
+  <p>Środowisko: <strong>{{ .Release.Namespace }}</strong>, wydanie {{ .Release.Name }}.</p>
+  <p>Wersja: <strong>{{ .Chart.AppVersion }}</strong></p>
+</body>
+</html>

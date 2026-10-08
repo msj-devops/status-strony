@@ -1,0 +1,248 @@
+# CI: lintery, testy, chart i obraz przy każdym Pull Requeście i po każdym scaleniu do main.
+# Joby sprawdzają tylko te części, które zmienił Pull Request; job "CI OK" zbiera wyniki
+# i to on jest wymaganym testem w regule chroniącej main.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zmiany:
+    name: Zmiany
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.zmiany.outputs.python }}
+      yaml: ${{ steps.zmiany.outputs.yaml }}
+      docker: ${{ steps.zmiany.outputs.docker }}
+      workflow: ${{ steps.zmiany.outputs.workflow }}
+      chart: ${{ steps.zmiany.outputs.chart }}
+      obraz: ${{ steps.zmiany.outputs.obraz }}
+    steps:
+      - name: Pobierz kod repozytorium z historią
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Ustal, które części się zmieniły
+        id: zmiany
+        env:
+          GALAZ_DOCELOWA: ${{ github.base_ref }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "origin/$GALAZ_DOCELOWA...HEAD" > "$RUNNER_TEMP/zmienione.txt"
+          else
+            # po scaleniu do main sprawdzamy wszystko
+            git ls-files > "$RUNNER_TEMP/zmienione.txt"
+          fi
+          echo "Zmienione pliki:"
+          cat "$RUNNER_TEMP/zmienione.txt"
+          # zmiana samego ci.yml uruchamia wszystkie joby
+          czy() {
+            if grep -qE "$1|^\.github/workflows/ci\.yml$" "$RUNNER_TEMP/zmienione.txt"; then echo true; else echo false; fi
+          }
+          {
+            echo "python=$(czy '^healthcheck/.*\.(py|toml)$|^healthcheck/requirements.*\.txt$')"
+            echo "yaml=$(czy '\.ya?ml$|^\.yamllint')"
+            echo "docker=$(czy '^healthcheck/(Dockerfile|\.dockerignore)$')"
+            echo "workflow=$(czy '^\.github/workflows/')"
+            echo "chart=$(czy '^chart/|^wdrozenia/')"
+            echo "obraz=$(czy '^healthcheck/(Dockerfile|\.dockerignore|healthcheck\.py|requirements\.txt)$')"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  lint-python:
+    name: "Lint: Python"
+    needs: zmiany
+    if: needs.zmiany.outputs.python == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Pythona
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: healthcheck/requirements-dev.txt
+
+      - name: Zainstaluj narzędzia
+        run: pip install -r healthcheck/requirements-dev.txt
+
+      - name: ruff
+        run: ruff check --output-format=github healthcheck
+
+  lint-yaml:
+    name: "Lint: YAML"
+    needs: zmiany
+    if: needs.zmiany.outputs.yaml == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Pythona
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: healthcheck/requirements-dev.txt
+
+      - name: Zainstaluj narzędzia
+        run: pip install -r healthcheck/requirements-dev.txt
+
+      - name: yamllint
+        run: yamllint --format github .
+
+  lint-docker:
+    name: "Lint: Dockerfile"
+    needs: zmiany
+    if: needs.zmiany.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: hadolint
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo hadolint/hadolint:v2.15.1 hadolint --no-color healthcheck/Dockerfile
+
+  lint-workflow:
+    name: "Lint: workflow"
+    needs: zmiany
+    if: needs.zmiany.outputs.workflow == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: actionlint (z shellcheck dla kroków run)
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
+
+  testy:
+    name: Testy (Python ${{ matrix.python }})
+    needs: zmiany
+    if: needs.zmiany.outputs.python == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 jest w obrazie (Dockerfile), nowsze: żeby aktualizacja obrazu nie była niespodzianką
+        python: ["3.12", "3.13", "3.14"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: healthcheck
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Pythona ${{ matrix.python }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: healthcheck/requirements-dev.txt
+
+      - name: Zainstaluj zależności i narzędzia
+        run: pip install -r requirements-dev.txt
+
+      - name: pytest
+        run: python -m pytest -v
+
+  chart:
+    name: Chart
+    needs: zmiany
+    if: needs.zmiany.outputs.chart == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      KUBECONFORM_WERSJA: v0.8.0
+      KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+      # wersja Kubernetesa w klastrze, na który wdrażamy (minikube z Fazy 2)
+      KUBERNETES_WERSJA: 1.37.0
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Helma
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+
+      - name: Zainstaluj kubeconform
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSLo "$RUNNER_TEMP/kubeconform.tar.gz" \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_WERSJA}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  $RUNNER_TEMP/kubeconform.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$RUNNER_TEMP/bin" kubeconform
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: helm lint i kubeconform dla dev i prod
+        run: |
+          set -o pipefail  # błąd helm template ma zatrzymać krok, a nie dać kubeconform puste wejście
+          for srodowisko in dev prod; do
+            echo "::group::$srodowisko"
+            helm lint --strict chart/status-strony -f "wdrozenia/$srodowisko/values.yaml"
+            helm template "strona-$srodowisko" chart/status-strony -n "f2-$srodowisko" -f "wdrozenia/$srodowisko/values.yaml" \
+              | kubeconform -strict -summary -kubernetes-version "$KUBERNETES_WERSJA"
+            echo "::endgroup::"
+          done
+
+  obraz:
+    name: Obraz
+    needs: zmiany
+    if: needs.zmiany.outputs.obraz == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Zbuduj obraz (bez publikacji)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: healthcheck
+          push: false
+          load: true
+          tags: healthcheck:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Sprawdź, że obraz się uruchamia
+        run: docker run --rm healthcheck:ci --help
+
+  wynik:
+    name: CI OK
+    needs: [zmiany, lint-python, lint-yaml, lint-docker, lint-workflow, testy, chart, obraz]
+    # always(): job rusza także wtedy, gdy coś wyżej się nie udało albo przebieg anulowano
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Sprawdź wyniki jobów
+        env:
+          WYNIKI: ${{ toJSON(needs) }}
+        run: |
+          echo "$WYNIKI" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          # pominięty job (brak zmian w jego części) jest w porządku; porażka i anulowanie nie
+          if echo "$WYNIKI" | jq -e '[.[].result] | any(. == "failure" or . == "cancelled")' > /dev/null; then
+            echo "::error::Co najmniej jeden job CI nie zakończył się sukcesem"
+            exit 1
+          fi

@@ -2,7 +2,7 @@
 
 Chart Helm strony zespołu. Jeden release to cała aplikacja w jednej przestrzeni nazw:
 
-- **strona** (nginx) z treścią z ConfigMap i panelem `/admin/` za hasłem (HTTP Basic),
+- **strona** (nginx) z treścią z ConfigMap i panelem `/admin/` za hasłem (HTTP Basic). Treść i konfiguracja nginx są w `files/` (wyrażenia Helma w tych plikach wypełnia `tpl`),
 - **healthcheck**: CronJob, który co 5 minut sprawdza stronę i panel (i cele z `healthcheck.cele`) i zapisuje raport `raport.json` na PVC,
 - **strona statusu** (nginx): podaje ostatni raport z tego samego PVC, tylko do odczytu,
 - **Ingress** dla dwóch hostów: strony i strony statusu.
