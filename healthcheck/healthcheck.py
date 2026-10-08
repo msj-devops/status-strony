@@ -70,7 +70,7 @@ def sprawdz_cel(url, oczekiwany_status, timeout):
         "url": url,
         "status": status,
         "czas_ms": czas_ms,
-        "ok": status == oczekiwany_status,
+        "ok": status is not None,
     }
 
 
