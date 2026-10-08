@@ -81,6 +81,14 @@ def podsumowanie(wyniki):
     return f"Podsumowanie: {ok}/{len(wyniki)} celów OK, łącznie {razem_ms} ms"
 
 
+def najwolniejszy(wyniki):
+    """Linia o celu, który odpowiadał najdłużej, np. 'Najwolniejszy cel: http://… (412 ms)'; None bez celów."""
+    if not wyniki:
+        return None
+    w = max(wyniki, key=lambda x: x.get("czas_ms", 0))
+    return f"Najwolniejszy cel: {w['url']} ({w.get('czas_ms', 0)} ms)"
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Sprawdza dostępność adresów HTTP z pliku YAML."
@@ -113,6 +121,9 @@ def main():
         ocena = "OK" if wynik["ok"] else "BŁĄD"
         print(f"{wynik['url']:<45} {status:>6} {wynik['czas_ms']:>8}  {ocena}")
     print(podsumowanie(wyniki))
+    linia = najwolniejszy(wyniki)
+    if linia:
+        print(linia)
 
     if args.raport:
         try:
