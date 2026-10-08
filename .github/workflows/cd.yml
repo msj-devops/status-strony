@@ -131,8 +131,11 @@ jobs:
     # runner w VM: tylko on widzi klaster minikube. Ten workflow rusza wyłącznie po pushu do main,
     # nigdy przy Pull Requeście, więc na runnerze w VM nie wykona się kod spoza main.
     runs-on: [self-hosted, minikube]
-    # środowisko dev: historia wdrożeń w GitHubie; wdrażać do niego wolno tylko z main
-    environment: dev
+    # środowisko dev: historia wdrożeń w GitHubie z adresem strony (zmienna środowiska ADRES_STRONY);
+    # wdrażać do niego wolno tylko z main, a jego sekret PANEL_HASLO dostaje tylko ten job
+    environment:
+      name: dev
+      url: ${{ vars.ADRES_STRONY }}
     timeout-minutes: 10
     env:
       PRZESTRZEN: f2-dev
@@ -140,6 +143,25 @@ jobs:
     steps:
       - name: Pobierz kod repozytorium
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Hasło do panelu z sekretu środowiska dev → Secret strona-htpasswd
+        env:
+          PANEL_LOGIN: ${{ vars.PANEL_LOGIN }}
+          PANEL_HASLO: ${{ secrets.PANEL_HASLO }}
+        run: |
+          if [ -z "$PANEL_LOGIN" ] || [ -z "$PANEL_HASLO" ]; then
+            echo "::error::Brak zmiennej PANEL_LOGIN albo sekretu PANEL_HASLO w środowisku dev (Settings → Environments → dev)"
+            exit 1
+          fi
+          # hasło na wejście openssl (nie jako argument: argumenty procesów widać w ps)
+          skrot="$(printf '%s' "$PANEL_HASLO" | openssl passwd -apr1 -stdin)"
+          # skrót wyliczył job, więc GitHub nie wie, że to sekret: maskujemy go sami
+          echo "::add-mask::$skrot"
+          # utwórz albo zaktualizuj Secret; manifest (z hasłem w base64) tylko w potoku, nigdzie nie wypisany
+          printf '%s:%s\n' "$PANEL_LOGIN" "$skrot" \
+            | kubectl -n "$PRZESTRZEN" create secret generic strona-htpasswd --from-file=htpasswd=/dev/stdin \
+                --dry-run=client -o yaml \
+            | kubectl -n "$PRZESTRZEN" apply -f -
 
       - name: Wdróż chart z obrazem tego commita (przy błędzie Helm wraca do poprzedniej wersji)
         run: |
