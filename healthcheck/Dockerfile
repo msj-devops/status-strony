@@ -21,8 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Potem kod aplikacji.
 COPY healthcheck.py .
 
-# Od tej chwili (i w kontenerze) nie-root.
-USER healthcheck
+# Od tej chwili (i w kontenerze) nie-root. UID liczbą: Kubernetes (runAsNonRoot) sprawdzi go bez /etc/passwd obrazu.
+USER 10001
 
 # Obraz działa jak polecenie: argumenty z `docker run <obraz> …` trafiają do healthcheck.py.
 # Forma exec (JSON) — inaczej argumenty są ignorowane, a sygnały nie docierają do Pythona.

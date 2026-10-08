@@ -86,7 +86,9 @@ jobs:
             echo
             echo "| Raport | Adres | Status | Czas [ms] | Wynik |"
             echo "|---|---|---|---|---|"
+            # shellcheck disable=SC2016  # $r to zmienna jq, nie powłoki
+            wiersz='.[] | "| \($r) | \(.url) | \(.status // "-") | \(.czas_ms) | \(if .ok then "OK" else "BŁĄD" end) |"'
             for plik in raport-*.json; do
-              jq -r --arg r "$plik" '.[] | "| \($r) | \(.url) | \(.status // "-") | \(.czas_ms) | \(if .ok then "OK" else "BŁĄD" end) |"' "$plik"
+              jq -r --arg r "$plik" "$wiersz" "$plik"
             done
           } >> "$GITHUB_STEP_SUMMARY"
