@@ -27,4 +27,4 @@ jobs:
           echo "Commit: $(git rev-parse HEAD)"
 
       - name: Pokaż zawartość repozytorium
-        run: ls -la healthcheck strona chart wdrozenia
+        run: ls -la healthcheck chart wdrozenia
