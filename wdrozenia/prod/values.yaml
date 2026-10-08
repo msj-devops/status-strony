@@ -8,7 +8,7 @@ status:
 healthcheck:
   image:
     repository: ghcr.io/msj-devops/healthcheck
-    tag: 1.1.0
+    tag: 1.0.0
   cele:
     - url: http://strona-prod-strona/nie-ma-takiej-strony
       oczekiwany_status: 404
