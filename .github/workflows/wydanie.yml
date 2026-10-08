@@ -1,0 +1,92 @@
+# Wydanie: tag vX.Y.Z na commicie z main. Obraz tego commita (zbudowany przez CD) dostaje tag wersji,
+# a po zatwierdzeniu w środowisku prod powstaje Pull Request, który zmienia wersję w wdrozenia/prod/values.yaml.
+# Po jego scaleniu Argo CD wdraża nową wersję na prod.
+name: Wydanie
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wydanie
+  cancel-in-progress: false
+
+env:
+  OBRAZ: ghcr.io/msj-devops/healthcheck
+
+jobs:
+  obraz:
+    name: Obraz wydania
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      wersja: ${{ steps.wersja.outputs.wersja }}
+    steps:
+      - name: Wersja z tagu
+        id: wersja
+        run: |
+          wersja="${GITHUB_REF_NAME#v}"
+          if ! [[ "$wersja" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME nie ma postaci vGŁÓWNA.PODRZĘDNA.POPRAWKA"
+            exit 1
+          fi
+          echo "wersja=$wersja" >> "$GITHUB_OUTPUT"
+
+      - name: Zaloguj do GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Nadaj obrazowi commita tag wersji (bez ponownego budowania)
+        env:
+          WERSJA: ${{ steps.wersja.outputs.wersja }}
+        run: |
+          if ! docker buildx imagetools inspect "$OBRAZ:$GITHUB_SHA" > /dev/null; then
+            echo "::error::Brak obrazu $OBRAZ:$GITHUB_SHA. Taguj commit z main, dla którego workflow CD zakończył się sukcesem"
+            exit 1
+          fi
+          docker buildx imagetools create --tag "$OBRAZ:$WERSJA" "$OBRAZ:$GITHUB_SHA"
+          docker buildx imagetools inspect "$OBRAZ:$WERSJA"
+
+  promocja:
+    name: Promocja na prod
+    needs: obraz
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # wymagane zatwierdzenie: ustawione w środowisku prod (Settings → Environments)
+    environment: prod
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      WERSJA: ${{ needs.obraz.outputs.wersja }}
+    steps:
+      - name: Pobierz main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Pull Request ze zmianą wersji na prod
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          galaz="promocja/v$WERSJA"
+          git switch -c "$galaz"
+          yq -i '.healthcheck.image.repository = strenv(OBRAZ) | .healthcheck.image.tag = strenv(WERSJA)' \
+            wdrozenia/prod/values.yaml
+          git diff
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Prod: healthcheck $WERSJA"
+          git push origin "$galaz"
+          przebieg="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh pr create --base main --head "$galaz" --title "Prod: healthcheck $WERSJA" \
+            --body "Promocja wydania $GITHUB_REF_NAME (obraz $OBRAZ:$WERSJA). Po scaleniu Argo CD wdroży ją w f2-prod. Przebieg: $przebieg"
