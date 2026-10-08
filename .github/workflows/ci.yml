@@ -127,9 +127,40 @@ jobs:
       - name: actionlint (z shellcheck dla kroków run)
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
 
+  testy:
+    name: Testy (Python ${{ matrix.python }})
+    needs: zmiany
+    if: needs.zmiany.outputs.python == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 jest w obrazie (Dockerfile), nowsze: żeby aktualizacja obrazu nie była niespodzianką
+        python: ["3.12", "3.13", "3.14"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: healthcheck
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Pythona ${{ matrix.python }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: healthcheck/requirements-dev.txt
+
+      - name: Zainstaluj zależności i narzędzia
+        run: pip install -r requirements-dev.txt
+
+      - name: pytest
+        run: python -m pytest -v
+
   wynik:
     name: CI OK
-    needs: [zmiany, lint-python, lint-yaml, lint-docker, lint-workflow]
+    needs: [zmiany, lint-python, lint-yaml, lint-docker, lint-workflow, testy]
     # always(): job rusza także wtedy, gdy coś wyżej się nie udało albo przebieg anulowano
     if: always()
     runs-on: ubuntu-24.04

@@ -1,5 +1,6 @@
 # Narzędzia do pracy nad healthcheckiem: lokalnie w .venv i w CI (te same wersje).
 # Program ich nie potrzebuje, więc obraz instaluje tylko requirements.txt.
 -r requirements.txt
+pytest==9.1.1
 ruff==0.16.10
 yamllint==1.38.0
