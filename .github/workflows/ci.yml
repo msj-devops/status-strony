@@ -193,6 +193,7 @@ jobs:
 
       - name: helm lint i kubeconform dla dev i prod
         run: |
+          set -o pipefail  # błąd helm template ma zatrzymać krok, a nie dać kubeconform puste wejście
           for srodowisko in dev prod; do
             echo "::group::$srodowisko"
             helm lint --strict chart/status-strony -f "wdrozenia/$srodowisko/values.yaml"

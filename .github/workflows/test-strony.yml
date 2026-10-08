@@ -40,6 +40,7 @@ jobs:
 
       - name: Wyrenderuj stronę z chartu (wartości dev)
         run: |
+          set -o pipefail
           strona="$RUNNER_TEMP/strona"
           mkdir -p "$strona/html/admin" "$strona/nginx"
           helm template strona-dev chart/status-strony -n f2-dev -f wdrozenia/dev/values.yaml \
