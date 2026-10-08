@@ -1,0 +1,147 @@
+# CI: bramki jakości przy każdym Pull Requeście i po każdym scaleniu do main.
+# Joby sprawdzają tylko te części, które zmienił Pull Request; job "CI OK" zbiera wyniki
+# i to on jest wymaganym testem w regule chroniącej main.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zmiany:
+    name: Zmiany
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.zmiany.outputs.python }}
+      yaml: ${{ steps.zmiany.outputs.yaml }}
+      docker: ${{ steps.zmiany.outputs.docker }}
+      workflow: ${{ steps.zmiany.outputs.workflow }}
+    steps:
+      - name: Pobierz kod repozytorium z historią
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Ustal, które części się zmieniły
+        id: zmiany
+        env:
+          GALAZ_DOCELOWA: ${{ github.base_ref }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "origin/$GALAZ_DOCELOWA...HEAD" > "$RUNNER_TEMP/zmienione.txt"
+          else
+            # po scaleniu do main sprawdzamy wszystko
+            git ls-files > "$RUNNER_TEMP/zmienione.txt"
+          fi
+          echo "Zmienione pliki:"
+          cat "$RUNNER_TEMP/zmienione.txt"
+          # zmiana samego ci.yml uruchamia wszystkie joby
+          czy() {
+            if grep -qE "$1|^\.github/workflows/ci\.yml$" "$RUNNER_TEMP/zmienione.txt"; then echo true; else echo false; fi
+          }
+          {
+            echo "python=$(czy '^healthcheck/.*\.(py|toml)$|^healthcheck/requirements.*\.txt$')"
+            echo "yaml=$(czy '\.ya?ml$|^\.yamllint')"
+            echo "docker=$(czy '^healthcheck/(Dockerfile|\.dockerignore)$')"
+            echo "workflow=$(czy '^\.github/workflows/')"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  lint-python:
+    name: "Lint: Python"
+    needs: zmiany
+    if: needs.zmiany.outputs.python == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Pythona
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: healthcheck/requirements-dev.txt
+
+      - name: Zainstaluj narzędzia
+        run: pip install -r healthcheck/requirements-dev.txt
+
+      - name: ruff
+        run: ruff check --output-format=github healthcheck
+
+  lint-yaml:
+    name: "Lint: YAML"
+    needs: zmiany
+    if: needs.zmiany.outputs.yaml == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Pythona
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: healthcheck/requirements-dev.txt
+
+      - name: Zainstaluj narzędzia
+        run: pip install -r healthcheck/requirements-dev.txt
+
+      - name: yamllint
+        run: yamllint --format github .
+
+  lint-docker:
+    name: "Lint: Dockerfile"
+    needs: zmiany
+    if: needs.zmiany.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: hadolint
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo hadolint/hadolint:v2.15.1 hadolint --no-color healthcheck/Dockerfile
+
+  lint-workflow:
+    name: "Lint: workflow"
+    needs: zmiany
+    if: needs.zmiany.outputs.workflow == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: actionlint (z shellcheck dla kroków run)
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
+
+  wynik:
+    name: CI OK
+    needs: [zmiany, lint-python, lint-yaml, lint-docker, lint-workflow]
+    # always(): job rusza także wtedy, gdy coś wyżej się nie udało albo przebieg anulowano
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Sprawdź wyniki jobów
+        env:
+          WYNIKI: ${{ toJSON(needs) }}
+        run: |
+          echo "$WYNIKI" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          # pominięty job (brak zmian w jego części) jest w porządku; porażka i anulowanie nie
+          if echo "$WYNIKI" | jq -e '[.[].result] | any(. == "failure" or . == "cancelled")' > /dev/null; then
+            echo "::error::Co najmniej jeden job CI nie zakończył się sukcesem"
+            exit 1
+          fi
