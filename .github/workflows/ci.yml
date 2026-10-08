@@ -1,4 +1,4 @@
-# CI: bramki jakości przy każdym Pull Requeście i po każdym scaleniu do main.
+# CI: lintery, testy, chart i obraz przy każdym Pull Requeście i po każdym scaleniu do main.
 # Joby sprawdzają tylko te części, które zmienił Pull Request; job "CI OK" zbiera wyniki
 # i to on jest wymaganym testem w regule chroniącej main.
 name: CI
@@ -25,6 +25,8 @@ jobs:
       yaml: ${{ steps.zmiany.outputs.yaml }}
       docker: ${{ steps.zmiany.outputs.docker }}
       workflow: ${{ steps.zmiany.outputs.workflow }}
+      chart: ${{ steps.zmiany.outputs.chart }}
+      obraz: ${{ steps.zmiany.outputs.obraz }}
     steps:
       - name: Pobierz kod repozytorium z historią
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,6 +55,8 @@ jobs:
             echo "yaml=$(czy '\.ya?ml$|^\.yamllint')"
             echo "docker=$(czy '^healthcheck/(Dockerfile|\.dockerignore)$')"
             echo "workflow=$(czy '^\.github/workflows/')"
+            echo "chart=$(czy '^chart/|^wdrozenia/')"
+            echo "obraz=$(czy '^healthcheck/(Dockerfile|\.dockerignore|healthcheck\.py|requirements\.txt)$')"
           } | tee -a "$GITHUB_OUTPUT"
 
   lint-python:
@@ -158,9 +162,74 @@ jobs:
       - name: pytest
         run: python -m pytest -v
 
+  chart:
+    name: Chart
+    needs: zmiany
+    if: needs.zmiany.outputs.chart == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      KUBECONFORM_WERSJA: v0.8.0
+      KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+      # wersja Kubernetesa w klastrze, na który wdrażamy (minikube z Fazy 2)
+      KUBERNETES_WERSJA: 1.37.0
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Helma
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+
+      - name: Zainstaluj kubeconform
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSLo "$RUNNER_TEMP/kubeconform.tar.gz" \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_WERSJA}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  $RUNNER_TEMP/kubeconform.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$RUNNER_TEMP/bin" kubeconform
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: helm lint i kubeconform dla dev i prod
+        run: |
+          for srodowisko in dev prod; do
+            echo "::group::$srodowisko"
+            helm lint --strict chart/status-strony -f "wdrozenia/$srodowisko/values.yaml"
+            helm template "strona-$srodowisko" chart/status-strony -n "f2-$srodowisko" -f "wdrozenia/$srodowisko/values.yaml" \
+              | kubeconform -strict -summary -kubernetes-version "$KUBERNETES_WERSJA"
+            echo "::endgroup::"
+          done
+
+  obraz:
+    name: Obraz
+    needs: zmiany
+    if: needs.zmiany.outputs.obraz == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Zbuduj obraz (bez publikacji)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: healthcheck
+          push: false
+          load: true
+          tags: healthcheck:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Sprawdź, że obraz się uruchamia
+        run: docker run --rm healthcheck:ci --help
+
   wynik:
     name: CI OK
-    needs: [zmiany, lint-python, lint-yaml, lint-docker, lint-workflow, testy]
+    needs: [zmiany, lint-python, lint-yaml, lint-docker, lint-workflow, testy, chart, obraz]
     # always(): job rusza także wtedy, gdy coś wyżej się nie udało albo przebieg anulowano
     if: always()
     runs-on: ubuntu-24.04
