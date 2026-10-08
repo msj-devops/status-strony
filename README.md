@@ -52,3 +52,17 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python3 healthcheck.py PLIK_Z_CELAMI.yaml --raport raport.json
 ```
+
+## CD
+
+```
+scalenie do main ─▶ CD: obraz ghcr.io/msj-devops/healthcheck:<SHA> (amd64, arm64)
+                 ─▶ próba w klastrze kind (runner GitHuba) ─▶ dev: runner w VM, helm upgrade do f2-dev
+tag vX.Y.Z       ─▶ Wydanie: obraz <SHA> dostaje tag X.Y.Z ─▶ zatwierdzenie (środowisko prod)
+                 ─▶ Pull Request „Prod: healthcheck X.Y.Z” ─▶ scalenie ─▶ Argo CD wdraża f2-prod
+```
+
+- **Dev** wdraża się sam po każdym scaleniu do `main` (workflow `CD`, job na runnerze w VM z etykietą `minikube`). Runner działa jako użytkownik bez `sudo`, a jego konto w klastrze ma uprawnienia tylko w `f2-dev` (`wdrozenia/dev/dostep-runnera.yaml`).
+- **Wydanie:** `git tag -a v1.2.0 -m "…"` na commicie z `main`, dla którego `CD` jest zielony, i `git push origin v1.2.0`. Po zatwierdzeniu w środowisku `prod` workflow `Wydanie` otwiera Pull Request ze zmianą wersji w `wdrozenia/prod/values.yaml`. Scalasz go jak każdy inny, przy zielonych testach.
+- **Wycofanie na prod:** `git revert` commitu „Prod: healthcheck X.Y.Z” w Pull Requeście i scalenie. Argo CD wróci do poprzedniej wersji.
+- **Wycofanie na dev:** ponowne uruchomienie joba `Wdrożenie na dev` z przebiegu `CD` dla poprzedniego commita (`gh run rerun <ID> --job <ID joba>`).

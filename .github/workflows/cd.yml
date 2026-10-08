@@ -128,6 +128,8 @@ jobs:
     # runner w VM: tylko on widzi klaster minikube. Ten workflow rusza wyłącznie po pushu do main,
     # nigdy przy Pull Requeście, więc na runnerze w VM nie wykona się kod spoza main.
     runs-on: [self-hosted, minikube]
+    # środowisko dev: historia wdrożeń w GitHubie; wdrażać do niego wolno tylko z main
+    environment: dev
     timeout-minutes: 10
     env:
       PRZESTRZEN: f2-dev
