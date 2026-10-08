@@ -1,0 +1,11 @@
+# Ustawienia narzędzi deweloperskich healthchecka (ruff, pytest). To nie jest paczka do instalacji:
+# program uruchamia się jak dotąd, `python3 healthcheck.py …`.
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# katalog healthcheck/ na ścieżce importu: testy robią `import healthcheck`
+pythonpath = ["."]
+addopts = "-ra"

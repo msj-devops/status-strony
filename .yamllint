@@ -1,0 +1,20 @@
+# yamllint: reguły domyślne z kilkoma świadomymi zmianami.
+extends: default
+
+ignore: |
+  # szablony Helma to nie YAML, dopóki Helm ich nie wyrenderuje (sprawdza je job chartu)
+  chart/status-strony/templates/
+  .venv/
+
+rules:
+  # długie polecenia w workflow i adresy w komentarzach
+  line-length:
+    max: 140
+  # pliki z jednym dokumentem nie potrzebują "---"
+  document-start: disable
+  # klucz "on:" w workflow GitHub Actions to nazwa sekcji, a nie wartość logiczna
+  truthy:
+    check-keys: false
+  # komentarz z wersją przy przypiętej akcji: "uses: …@sha # v1.2.3"
+  comments:
+    min-spaces-from-content: 1
