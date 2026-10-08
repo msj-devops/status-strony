@@ -1,0 +1,68 @@
+// CI status-strony w Jenkinsie: część CI z .github/workflows/ci.yml (lint i testy healthchecka).
+// Job typu Pipeline w Jenkinsie bierze ten plik z repozytorium (Script Path: ci/Jenkinsfile).
+// Bez joba obrazu i chartu: agent (kontener Jenkinsa) nie ma Dockera ani Helma.
+pipeline {
+    agent any
+
+    options {
+        // odpowiednik timeout-minutes; bez limitu zawieszony build blokuje executor
+        timeout(time: 20, unit: 'MINUTES')
+        // odpowiednik concurrency: nowy build czeka, aż skończy się poprzedni
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    triggers {
+        // Jenkins w VM nie dostanie powiadomień z GitHuba (webhook), więc sam pyta repozytorium
+        // co ok. 5 minut; H rozkłada zapytania różnych jobów w czasie
+        pollSCM('H/5 * * * *')
+    }
+
+    environment {
+        PIP_DISABLE_PIP_VERSION_CHECK = '1'
+    }
+
+    stages {
+        stage('Narzędzia') {
+            steps {
+                // te same wersje co w CI na GitHubie: requirements-dev.txt
+                sh '''
+                    python3 -m venv healthcheck/.venv
+                    healthcheck/.venv/bin/pip install --quiet -r healthcheck/requirements-dev.txt
+                '''
+            }
+        }
+        stage('Lint') {
+            parallel {
+                stage('Lint: Python') {
+                    steps {
+                        sh 'healthcheck/.venv/bin/ruff check --output-format=concise healthcheck'
+                    }
+                }
+                stage('Lint: YAML') {
+                    steps {
+                        sh 'healthcheck/.venv/bin/yamllint .'
+                    }
+                }
+            }
+        }
+        stage('Testy') {
+            steps {
+                dir('healthcheck') {
+                    sh '.venv/bin/python -m pytest -v --junitxml=raport-testow.xml'
+                }
+            }
+            post {
+                always {
+                    junit 'healthcheck/raport-testow.xml'
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo 'CI nie przeszło: zobacz log etapu, który jest czerwony'
+        }
+    }
+}
