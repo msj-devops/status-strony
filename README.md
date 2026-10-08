@@ -95,7 +95,10 @@ gh run list --workflow cd.yml --branch main --limit 10        # ID przebiegu dla
 gh run view <ID> --json jobs --jq '.jobs[] | "\(.databaseId) \(.name)"'
 gh run rerun <ID> --job <ID joba „Wdrożenie na dev”>
 gh run watch <ID>
+kubectl -n f2-dev get cronjob strona-dev-healthcheck -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}{"\n"}'   # obraz <SHA> dobrego commita
 ```
+
+Sprawdź `dev` od razu po zakończeniu joba: każde scalenie do `main` (także Pull Request z wycofaniem prod) uruchamia `CD`, który wdroży `dev` z najnowszego commita.
 
 **Prod** (ściąganie: prod jest taki, jak `main`). Wycofanie to Pull Request z commitem cofającym promocję. Nikt nie robi na prod `kubectl` ani `helm`: Argo CD cofnie każdą ręczną zmianę.
 
@@ -108,7 +111,7 @@ git push -u origin wycofanie-<X.Y.Z>
 gh pr create --base main --title "Wycofanie <X.Y.Z> z prod" --body "Powód: …"
 ```
 
-Po zielonych sprawdzeniach scal, odśwież aplikację Argo CD (krok 5 wydania) i sprawdź wersję na prod. Gdy problem zostanie wyjaśniony, wersję przywracasz tak samo: `git revert` commita cofającego, w nowym Pull Requeście. Jeśli trzeba poprawki, wydajesz nową wersję (`<X.Y.Z+1>`).
+Po zielonych sprawdzeniach scal, odśwież aplikację Argo CD (krok 5 wydania) i sprawdź wersję na prod. Gdy problem zostanie wyjaśniony, wersję przywracasz tak samo: `git revert` commita cofającego, w nowym Pull Requeście (nowsze wersje gita nadają mu temat `Reapply "Prod: healthcheck <X.Y.Z>"`; w treści jest `This reverts commit …`). Jeśli trzeba poprawki, wydajesz nową wersję (`<X.Y.Z+1>`).
 
 ### Co działa na środowiskach
 
