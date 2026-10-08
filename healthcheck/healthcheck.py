@@ -75,9 +75,10 @@ def sprawdz_cel(url, oczekiwany_status, timeout):
 
 
 def podsumowanie(wyniki):
-    """Jedna linia z liczbą celów OK, np. 'Podsumowanie: 2/3 celów OK'."""
+    """Jedna linia z liczbą celów OK i łącznym czasem, np. 'Podsumowanie: 2/3 celów OK, łącznie 12 ms'."""
     ok = sum(1 for w in wyniki if w["ok"])
-    return f"Podsumowanie: {ok}/{len(wyniki)} celów OK"
+    razem_ms = sum(w.get("czas_ms", 0) for w in wyniki)
+    return f"Podsumowanie: {ok}/{len(wyniki)} celów OK, łącznie {razem_ms} ms"
 
 
 def main():

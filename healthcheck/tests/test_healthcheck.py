@@ -130,7 +130,11 @@ def test_kod_2_i_komunikat_gdy_brak_pliku(monkeypatch, tmp_path, capsys):
 
 @pytest.mark.parametrize(
     ("oki", "oczekiwane"),
-    [([True, True], "Podsumowanie: 2/2 celów OK"), ([True, False, False], "Podsumowanie: 1/3 celów OK"), ([], "Podsumowanie: 0/0 celów OK")],
+    [
+        ([True, True], "Podsumowanie: 2/2 celów OK, łącznie 20 ms"),
+        ([True, False, False], "Podsumowanie: 1/3 celów OK, łącznie 30 ms"),
+        ([], "Podsumowanie: 0/0 celów OK, łącznie 0 ms"),
+    ],
 )
-def test_podsumowanie_liczy_cele_ok(oki, oczekiwane):
-    assert healthcheck.podsumowanie([{"ok": ok} for ok in oki]) == oczekiwane
+def test_podsumowanie_liczy_cele_ok_i_czas(oki, oczekiwane):
+    assert healthcheck.podsumowanie([{"ok": ok, "czas_ms": 10} for ok in oki]) == oczekiwane
