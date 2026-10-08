@@ -74,6 +74,12 @@ def sprawdz_cel(url, oczekiwany_status, timeout):
     }
 
 
+def podsumowanie(wyniki):
+    """Jedna linia z liczbą celów OK, np. 'Podsumowanie: 2/3 celów OK'."""
+    ok = sum(1 for w in wyniki if w["ok"])
+    return f"Podsumowanie: {ok}/{len(wyniki)} celów OK"
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Sprawdza dostępność adresów HTTP z pliku YAML."
@@ -105,6 +111,7 @@ def main():
         status = "-" if wynik["status"] is None else wynik["status"]
         ocena = "OK" if wynik["ok"] else "BŁĄD"
         print(f"{wynik['url']:<45} {status:>6} {wynik['czas_ms']:>8}  {ocena}")
+    print(podsumowanie(wyniki))
 
     if args.raport:
         try:

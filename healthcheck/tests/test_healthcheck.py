@@ -126,3 +126,11 @@ def test_kod_2_i_komunikat_gdy_brak_pliku(monkeypatch, tmp_path, capsys):
 
     assert kod == 2
     assert "nie istnieje" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("oki", "oczekiwane"),
+    [([True, True], "Podsumowanie: 2/2 celów OK"), ([True, False, False], "Podsumowanie: 1/3 celów OK"), ([], "Podsumowanie: 0/0 celów OK")],
+)
+def test_podsumowanie_liczy_cele_ok(oki, oczekiwane):
+    assert healthcheck.podsumowanie([{"ok": ok} for ok in oki]) == oczekiwane
