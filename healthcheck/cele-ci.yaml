@@ -1,0 +1,8 @@
+# Cele healthchecka w workflow test-strony.yml: strona z katalogu strona/ podana przez nginx na runnerze.
+cele:
+  - url: http://localhost:8080/
+    oczekiwany_status: 200
+  - url: http://localhost:8080/admin/
+    oczekiwany_status: 401
+  - url: http://localhost:8080/nie-ma-takiej-strony
+    oczekiwany_status: 404
