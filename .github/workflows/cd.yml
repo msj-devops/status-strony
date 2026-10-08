@@ -61,3 +61,63 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  kind:
+    name: Próba w kind
+    needs: obraz
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PRZESTRZEN: f2-dev
+      RELEASE: strona-dev
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Przygotuj Helma
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+
+      - name: Utwórz klaster kind (Kubernetes jak w minikube)
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          version: v0.33.0
+          node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+          cluster_name: proba
+
+      - name: Przygotuj przestrzeń nazw i Secret panelu (hasło tylko na próbę)
+        run: |
+          kubectl create namespace "$PRZESTRZEN"
+          kubectl -n "$PRZESTRZEN" create secret generic strona-htpasswd \
+            --from-literal=htpasswd="proba:$(openssl passwd -apr1 "$(openssl rand -hex 12)")"
+
+      - name: Zainstaluj chart z obrazem tego commita
+        run: |
+          helm upgrade --install "$RELEASE" chart/status-strony -n "$PRZESTRZEN" \
+            -f wdrozenia/dev/values.yaml \
+            --set healthcheck.image.tag="$GITHUB_SHA" \
+            --wait --timeout 5m
+
+      - name: "Test dymny: healthcheck z nowego obrazu w klastrze"
+        run: |
+          kubectl -n "$PRZESTRZEN" create job test-dymny --from="cronjob/$RELEASE-healthcheck"
+          if ! kubectl -n "$PRZESTRZEN" wait --for=condition=complete job/test-dymny --timeout=120s; then
+            kubectl -n "$PRZESTRZEN" logs job/test-dymny || true
+            exit 1
+          fi
+          kubectl -n "$PRZESTRZEN" logs job/test-dymny
+
+      - name: "Test dymny: strona i panel odpowiadają"
+        run: |
+          kubectl -n "$PRZESTRZEN" port-forward "service/$RELEASE-strona" 8080:80 >/dev/null 2>&1 &
+          for _ in $(seq 1 15); do curl -fsS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/ | grep -q msj-devops
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/admin/)" = 401
+          echo "Strona: 200 z loginem, panel: 401"
+
+      - name: Co jest w klastrze (po błędzie)
+        if: failure()
+        run: |
+          kubectl -n "$PRZESTRZEN" get all,ingress,pvc
+          kubectl -n "$PRZESTRZEN" get events --sort-by=.lastTimestamp | tail -n 30
