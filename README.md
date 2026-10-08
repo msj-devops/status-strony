@@ -31,11 +31,104 @@ docker run --rm -p 8080:80 \
   nginx:1.30-alpine
 ```
 
-## CI
+## Pipeline CI/CD
 
-Każdy Pull Request sprawdza workflow `CI` (`.github/workflows/ci.yml`): lintery (ruff, yamllint, hadolint, actionlint), testy healthchecka na trzech wersjach Pythona, chart (`helm lint`, `helm template | kubeconform` dla `dev` i `prod`) i budowanie obrazu bez publikacji. Joby ruszają tylko dla zmienionych części, a job `CI OK` zbiera ich wyniki. Test strony (`test-strony.yml`) uruchamia stronę z chartu na amd64 i arm64. Gałąź `main` chroni reguła: scalenie wymaga zielonych `CI OK` i obu wariantów testu strony.
+Każda zmiana trafia na `main` Pull Requestem, który musi przejść CI. Po scaleniu pipeline sam buduje obraz, sprawdza go w tymczasowym klastrze i wdraża na `dev`. Na `prod` trafia tylko wersja oznaczona tagiem, po zatwierdzeniu, i to Argo CD w klastrze, a nie pipeline, zmienia prod.
 
-Testy i lintery lokalnie (w `healthcheck/`, w tych samych wersjach co w CI — `requirements-dev.txt`):
+```mermaid
+flowchart LR
+    PR[Pull Request] --> CI["CI (ci.yml, test-strony.yml)<br/>lint, testy, chart, obraz bez publikacji"]
+    CI -->|wymagane sprawdzenia zielone, scalenie| CD1["CD (cd.yml): obraz ghcr.io/msj-devops/healthcheck:SHA<br/>amd64 + arm64"]
+    CD1 --> KIND["próba w klastrze kind<br/>(runner GitHuba)"]
+    KIND --> DEV["dev: runner w VM<br/>helm upgrade strona-dev w f2-dev + test dymny"]
+    DEV -.->|tag vX.Y.Z na commicie z zielonym CD| WYD["Wydanie (wydanie.yml):<br/>obraz SHA dostaje tag X.Y.Z"]
+    WYD -->|zatwierdzenie w środowisku prod| PROMO["Pull Request „Prod: healthcheck X.Y.Z”<br/>(wdrozenia/prod/values.yaml)"]
+    PROMO -->|zielone sprawdzenia, scalenie| ARGO["Argo CD w klastrze<br/>synchronizuje f2-prod"]
+```
+
+### Workflow
+
+| Plik | Kiedy rusza | Co robi | Gdzie |
+|---|---|---|---|
+| `.github/workflows/ci.yml` | Pull Request, push do `main` | ruff, yamllint, hadolint, actionlint, pytest (3 wersje Pythona), `helm lint` + `kubeconform` dla dev i prod, budowanie obrazu bez publikacji; joby tylko dla zmienionych części, job `CI OK` zbiera wyniki | runnery GitHuba |
+| `.github/workflows/test-strony.yml` | Pull Request, push do `main` | strona z chartu w nginx na amd64 i arm64, cele 200/401/404 | runnery GitHuba |
+| `.github/workflows/cd.yml` | push do `main` | obraz `ghcr.io/msj-devops/healthcheck:<SHA>` → próba w kind → wdrożenie na `dev` (środowisko `dev`) | runnery GitHuba; job dev na runnerze w VM (etykieta `minikube`) |
+| `.github/workflows/wydanie.yml` | push tagu `vX.Y.Z` | tag wersji dla obrazu z SHA (bez budowania), po zatwierdzeniu w środowisku `prod` Pull Request ze zmianą wersji na prod | runnery GitHuba |
+| `.github/workflows/nocny-healthcheck.yml`, `dzien-dobry.yml` | harmonogram, Pull Request | healthcheck publicznych celów; informacje o runnerze | runnery GitHuba |
+
+Przekład CI na inne narzędzia (dokumentacja, nieuruchamiany w GitHubie): `ci/.gitlab-ci.yml` (GitLab CI), `ci/Jenkinsfile` (Jenkins: lint i testy).
+
+### Co musi działać
+
+- Gałąź `main` chroni reguła `ochrona-main`: Pull Request, zielone `CI OK` i oba warianty testu strony, bez pominięć.
+- Środowisko `dev` (wdrożenia tylko z `main`) i `prod` (wymagane zatwierdzenie, wdrożenia tylko z tagów `v*`).
+- Runner w VM jako usługa `actions.runner.msj-devops-status-strony.*`, na użytkowniku bez `sudo`, z kubeconfigiem konta z `wdrozenia/dev/dostep-runnera.yaml` (uprawnienia tylko w `f2-dev`).
+- Minikube z Argo CD core i aplikacją `status-strony-prod` (`wdrozenia/argocd/`).
+- Sekrety i zmienne środowisk: sekcja [Sekrety i konfiguracja środowisk](#sekrety-i-konfiguracja-środowisk).
+
+### Jak wydać wersję na prod
+
+1. Sprawdź, że zmiana jest na `main` i że przebieg `CD` dla tego commita jest zielony (obraz jest w GHCR, `dev` działa):
+
+   ```bash
+   git switch main && git pull
+   gh run list --workflow cd.yml --branch main --limit 3      # zielony przebieg dla commita, który wydajesz
+   ```
+
+2. Oznacz ten commit tagiem z adnotacją i wypchnij tag (numer wersji: SemVer, wyższy niż ostatni na prod):
+
+   ```bash
+   git tag -a v<X.Y.Z> <SHA> -m "Wydanie <X.Y.Z>: <co się zmieniło>"
+   git push origin v<X.Y.Z>
+   ```
+
+3. Workflow `Wydanie` nada obrazowi tag `<X.Y.Z>` i zatrzyma się na jobie `Promocja na prod`. Sprawdź `dev`, potem zatwierdź: *Actions → Wydanie → Review deployments → prod → Approve* (albo `gh run view <ID>` i link z wyniku).
+4. Workflow otworzy Pull Request „Prod: healthcheck <X.Y.Z>”. Kliknij w nim *Approve workflows to run* (sprawdzenia Pull Requestów od workflow nie ruszają same), poczekaj na zielone sprawdzenia i scal.
+5. Argo CD wdroży nową wersję w ciągu ok. 3 minut. Bez czekania: `kubectl -n argocd annotate application status-strony-prod argocd.argoproj.io/refresh=normal --overwrite`. Sprawdź wynik (niżej, „Co działa na środowiskach”).
+
+### Jak wycofać wersję
+
+**Dev** (wypychanie: pipeline wdraża konkretny commit). Ponownie uruchom job wdrożenia z przebiegu `CD` dla ostatniego dobrego commita. Zanim zaczniesz, poczekaj na koniec trwających przebiegów `CD` (kolejka). Każde kolejne scalenie do `main` wdroży `dev` z najnowszego commita, więc to rozwiązanie na chwilę: trwałe wycofanie to `git revert` zmiany na `main`.
+
+```bash
+gh run list --workflow cd.yml --branch main --limit 10        # ID przebiegu dla dobrego commita (kolumna z ID)
+gh run view <ID> --json jobs --jq '.jobs[] | "\(.databaseId) \(.name)"'
+gh run rerun <ID> --job <ID joba „Wdrożenie na dev”>
+gh run watch <ID>
+```
+
+**Prod** (ściąganie: prod jest taki, jak `main`). Wycofanie to Pull Request z commitem cofającym promocję. Nikt nie robi na prod `kubectl` ani `helm`: Argo CD cofnie każdą ręczną zmianę.
+
+```bash
+git switch main && git pull
+git log --oneline -- wdrozenia/prod/values.yaml               # commit „Prod: healthcheck <X.Y.Z>”
+git switch -c wycofanie-<X.Y.Z>
+git revert <SHA commita promocji>                             # w opisie: dlaczego wycofujesz
+git push -u origin wycofanie-<X.Y.Z>
+gh pr create --base main --title "Wycofanie <X.Y.Z> z prod" --body "Powód: …"
+```
+
+Po zielonych sprawdzeniach scal, odśwież aplikację Argo CD (krok 5 wydania) i sprawdź wersję na prod. Gdy problem zostanie wyjaśniony, wersję przywracasz tak samo: `git revert` commita cofającego, w nowym Pull Requeście. Jeśli trzeba poprawki, wydajesz nową wersję (`<X.Y.Z+1>`).
+
+### Co działa na środowiskach
+
+```bash
+# dev: wersja (SHA) i historia wdrożeń
+kubectl -n f2-dev get cronjob strona-dev-healthcheck -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}{"\n"}'
+helm history strona-dev -n f2-dev --max 5
+# prod: wersja w repozytorium, stan Argo CD i obraz w klastrze
+grep -A2 'image:' wdrozenia/prod/values.yaml
+kubectl -n argocd get application status-strony-prod
+kubectl -n f2-prod get cronjob strona-prod-healthcheck -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}{"\n"}'
+# zachowanie nowej wersji: healthcheck od ręki i jego log
+kubectl -n f2-prod create job sprawdzenie-wersji --from=cronjob/strona-prod-healthcheck
+kubectl -n f2-prod wait --for=condition=complete job/sprawdzenie-wersji --timeout=120s
+kubectl -n f2-prod logs job/sprawdzenie-wersji && kubectl -n f2-prod delete job sprawdzenie-wersji
+```
+
+### Testy i lintery lokalnie
+
+W `healthcheck/`, w tych samych wersjach co w CI (`requirements-dev.txt`):
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
@@ -44,7 +137,7 @@ python -m pytest
 ruff check .
 ```
 
-healthcheck:
+healthcheck bez klastra:
 
 ```bash
 cd healthcheck
@@ -52,20 +145,6 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python3 healthcheck.py PLIK_Z_CELAMI.yaml --raport raport.json
 ```
-
-## CD
-
-```
-scalenie do main ─▶ CD: obraz ghcr.io/msj-devops/healthcheck:<SHA> (amd64, arm64)
-                 ─▶ próba w klastrze kind (runner GitHuba) ─▶ dev: runner w VM, helm upgrade do f2-dev
-tag vX.Y.Z       ─▶ Wydanie: obraz <SHA> dostaje tag X.Y.Z ─▶ zatwierdzenie (środowisko prod)
-                 ─▶ Pull Request „Prod: healthcheck X.Y.Z” ─▶ scalenie ─▶ Argo CD wdraża f2-prod
-```
-
-- **Dev** wdraża się sam po każdym scaleniu do `main` (workflow `CD`, job na runnerze w VM z etykietą `minikube`). Runner działa jako użytkownik bez `sudo`, a jego konto w klastrze ma uprawnienia tylko w `f2-dev` (`wdrozenia/dev/dostep-runnera.yaml`).
-- **Wydanie:** `git tag -a v1.2.0 -m "…"` na commicie z `main`, dla którego `CD` jest zielony, i `git push origin v1.2.0`. Po zatwierdzeniu w środowisku `prod` workflow `Wydanie` otwiera Pull Request ze zmianą wersji w `wdrozenia/prod/values.yaml`. Scalasz go jak każdy inny, przy zielonych testach.
-- **Wycofanie na prod:** `git revert` commitu „Prod: healthcheck X.Y.Z” w Pull Requeście i scalenie. Argo CD wróci do poprzedniej wersji.
-- **Wycofanie na dev:** ponowne uruchomienie joba `Wdrożenie na dev` z przebiegu `CD` dla poprzedniego commita (`gh run rerun <ID> --job <ID joba>`).
 
 ## Sekrety i konfiguracja środowisk
 
