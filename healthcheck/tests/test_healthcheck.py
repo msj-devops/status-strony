@@ -138,3 +138,28 @@ def test_kod_2_i_komunikat_gdy_brak_pliku(monkeypatch, tmp_path, capsys):
 )
 def test_podsumowanie_liczy_cele_ok_i_czas(oki, oczekiwane):
     assert healthcheck.podsumowanie([{"ok": ok, "czas_ms": 10} for ok in oki]) == oczekiwane
+
+
+def test_najwolniejszy_wskazuje_cel_z_najdluzszym_czasem():
+    wyniki = [
+        {"url": "http://a.test/", "czas_ms": 12},
+        {"url": "http://b.test/", "czas_ms": 412},
+        {"url": "http://c.test/", "czas_ms": 30},
+    ]
+
+    assert (
+        healthcheck.najwolniejszy(wyniki)
+        == "Najwolniejszy cel: http://b.test/ (412 ms)"
+    )
+
+
+def test_najwolniejszy_bez_celow_to_none():
+    assert healthcheck.najwolniejszy([]) is None
+
+
+def test_program_wypisuje_najwolniejszy_cel(monkeypatch, serwer, plik_celow, capsys):
+    uruchom(
+        monkeypatch, plik_celow([(serwer + "/ok", 200), (serwer + "/wolny", 200)])
+    )
+
+    assert f"Najwolniejszy cel: {serwer}/wolny (" in capsys.readouterr().out
