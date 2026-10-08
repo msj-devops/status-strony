@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "status-strony.fullname" . }}
+  labels:
+    {{- include "status-strony.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.strona.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "status-strony.fullname" . }}-strona
+                port:
+                  name: http
+    - host: {{ .Values.status.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "status-strony.fullname" . }}-status
+                port:
+                  name: http

@@ -1,0 +1,65 @@
+# Wartości chartu status-strony. Opis każdego klucza: README.md chartu.
+
+# Login GitHub właściciela strony (widoczny na stronie i w panelu). Wymagany: chart nie ma
+# wartości domyślnej, podaj go w pliku wartości środowiska albo przez --set login=...
+login: ""
+
+ingress:
+  # klasa Ingress, czyli kontroler, który obsłuży oba hosty
+  className: traefik
+
+strona:
+  replicas: 3
+  image:
+    repository: nginx
+    tag: "1.30-alpine"
+  # host strony i panelu /admin/
+  host: strona.lab.local
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+admin:
+  # Secret z plikiem htpasswd pod kluczem "htpasswd". Chart go NIE tworzy: utwórz go przed
+  # instalacją w przestrzeni nazw release'u (README.md chartu, „Secret z hasłami”).
+  existingSecret: strona-htpasswd
+  # tekst w okienku logowania przeglądarki
+  realm: Panel strony
+
+status:
+  host: status.lab.local
+  image:
+    repository: nginx
+    tag: "1.30-alpine"
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 32Mi
+
+healthcheck:
+  image:
+    repository: msjtest/healthcheck
+    tag: "1.0"
+  schedule: "*/5 * * * *"
+  # Cele sprawdzane OPRÓCZ strony głównej i panelu tego release'u (te chart dodaje sam).
+  # Każdy cel: url i oczekiwany_status (format pliku celów z Fazy 1).
+  cele: []
+  #  - url: http://strona-prod-strona/nie-ma-takiej-strony
+  #    oczekiwany_status: 404
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+persistence:
+  # Nazwa istniejącego PVC na raporty. Pusta: chart tworzy własny PVC.
+  existingClaim: ""
+  # rozmiar PVC tworzonego przez chart
+  size: 20Mi

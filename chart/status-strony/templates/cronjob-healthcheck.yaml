@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "status-strony.fullname" . }}-healthcheck
+  labels:
+    {{- include "status-strony.labels" . | nindent 4 }}
+    app.kubernetes.io/component: healthcheck
+spec:
+  schedule: {{ .Values.healthcheck.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            {{- include "status-strony.labels" . | nindent 12 }}
+            app.kubernetes.io/component: healthcheck
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: healthcheck
+              image: "{{ .Values.healthcheck.image.repository }}:{{ .Values.healthcheck.image.tag }}"
+              args: ["/etc/healthcheck/cele.yaml", "--raport", "/raporty/raport.json"]
+              resources:
+                {{- toYaml .Values.healthcheck.resources | nindent 16 }}
+              volumeMounts:
+                - name: cele
+                  mountPath: /etc/healthcheck
+                  readOnly: true
+                - name: raporty
+                  mountPath: /raporty
+          volumes:
+            - name: cele
+              configMap:
+                name: {{ include "status-strony.fullname" . }}-healthcheck-cele
+            - name: raporty
+              persistentVolumeClaim:
+                claimName: {{ include "status-strony.pvc" . }}

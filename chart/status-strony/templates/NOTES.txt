@@ -1,0 +1,15 @@
+Wydanie {{ .Release.Name }} (chart {{ .Chart.Name }} {{ .Chart.Version }}) w przestrzeni nazw {{ .Release.Namespace }}.
+
+Adresy (przez Ingress, klasa {{ .Values.ingress.className }}):
+  strona:          http://{{ .Values.strona.host }}/
+  panel:           http://{{ .Values.strona.host }}/admin/   (konta z Secretu {{ .Values.admin.existingSecret }})
+  strona statusu:  http://{{ .Values.status.host }}/raport.json
+
+Z VM: curl -H "Host: {{ .Values.strona.host }}" http://$(minikube ip)/
+
+Pierwszy raport pojawi się po najbliższym uruchomieniu healthchecka ({{ .Values.healthcheck.schedule }}).
+Raport od ręki:
+  kubectl create job --from=cronjob/{{ include "status-strony.fullname" . }}-healthcheck reczny-$(date +%s) -n {{ .Release.Namespace }}
+
+Panel wymaga Secretu {{ .Values.admin.existingSecret }} (klucz htpasswd) w przestrzeni nazw {{ .Release.Namespace }}.
+Bez niego Pody strony zostaną w ContainerCreating. Przepis: README.md chartu.

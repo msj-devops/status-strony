@@ -1,0 +1,25 @@
+# System i edytory
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Wyniki uruchomień healthchecka
+raport*.json
+
+# Helm: paczki chartu
+*.tgz
+
+# Sekrety — nigdy do repozytorium
+.env
+*.pem
+*.key
+*htpasswd*
+sekrety/
