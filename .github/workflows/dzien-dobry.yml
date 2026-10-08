@@ -1,0 +1,27 @@
+# Pierwszy workflow: przywitanie i informacje o runnerze przy każdym Pull Requeście.
+name: Dzień dobry
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  powitanie:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Pobierz kod repozytorium
+        uses: actions/checkout@v7
+
+      - name: Przywitaj się
+        run: echo "Dzień dobry! Tu runner GitHuba, sprawdzam repozytorium status-strony."
+
+      - name: Pokaż, na czym działam
+        run: |
+          echo "System:"; uname -a
+          echo "Procesory: $(nproc)"
+          echo "Użytkownik: $(whoami)"
+          echo "Katalog roboczy: $(pwd)"
+          echo "Commit: $(git rev-parse HEAD)"
+
+      - name: Pokaż zawartość repozytorium
+        run: ls -la healthcheck strona chart wdrozenia
