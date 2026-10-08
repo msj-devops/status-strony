@@ -1,0 +1,18 @@
+# Tymczasowy eksperyment (Moduł 02): workflow z filtrem ścieżek jako wymagany test.
+name: Eksperyment ścieżki
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo "sprawdzam dokumentację"

@@ -34,3 +34,5 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python3 healthcheck.py PLIK_Z_CELAMI.yaml --raport raport.json
 ```
+
+<!-- eksperyment: zmiana tylko w README -->
