@@ -6,6 +6,8 @@
 # - job zbiorczy "CI OK": w GitLabie merge request blokuje ustawienie projektu
 #   "Pipelines must succeed", które patrzy na cały pipeline, a nie na wybrane joby.
 # - lint workflow GitHub Actions (actionlint): sprawdza pliki innego narzędzia; zostaje w GitHubie.
+# Limit czasu (timeout-minutes) jest w każdym jobie: default: nie przyjmuje timeout,
+# a wspólny limit dla wszystkich jobów to ustawienie projektu (Settings → CI/CD → General pipelines).
 
 workflow:
   rules:
@@ -23,7 +25,6 @@ default:
   image: python:3.12-slim
   # nowszy pipeline na tej samej gałęzi przerywa starszy (concurrency: cancel-in-progress)
   interruptible: true
-  timeout: 10 minutes
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -52,12 +53,14 @@ variables:
 
 lint-python:
   stage: lint
+  timeout: 5 minutes
   extends: [.zmiany-python, .narzedzia-python]
   script:
     - ruff check healthcheck
 
 lint-yaml:
   stage: lint
+  timeout: 5 minutes
   extends: .narzedzia-python
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -72,6 +75,7 @@ lint-yaml:
 
 lint-docker:
   stage: lint
+  timeout: 5 minutes
   image:
     name: hadolint/hadolint:v2.15.1-debian
     entrypoint: [""]
@@ -87,6 +91,7 @@ lint-docker:
 
 testy:
   stage: test
+  timeout: 10 minutes
   extends: [.zmiany-python, .narzedzia-python]
   image: python:${PYTHON}-slim
   parallel:
@@ -103,6 +108,7 @@ testy:
 
 chart:
   stage: test
+  timeout: 10 minutes
   image:
     name: alpine/helm:4.3.0
     entrypoint: [""]
@@ -133,6 +139,7 @@ chart:
 
 obraz:
   stage: build
+  timeout: 15 minutes
   image: docker:29
   services:
     - docker:29-dind
